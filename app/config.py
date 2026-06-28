@@ -9,7 +9,10 @@ class Settings(BaseSettings):
     qdrant_api_key: str
     collection_name: str = "rag_documents"
 
-    # OpenAI
+    # Anthropic (LLM)
+    anthropic_api_key: str
+
+    # OpenAI (embeddings only)
     openai_api_key: str
 
     # Embedding
@@ -17,8 +20,9 @@ class Settings(BaseSettings):
     embedding_dimension: int = 1536
 
     # LLM
-    llm_model: str = "gpt-4o-mini"
+    llm_model: str = "claude-3-5-haiku-20241022"
     llm_temperature: float = 0.0
+    llm_max_tokens: int = 2048
 
     # Chunking
     chunk_size: int = 1000

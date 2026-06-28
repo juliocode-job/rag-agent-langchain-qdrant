@@ -1,4 +1,4 @@
-from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnableParallel, RunnablePassthrough
@@ -26,49 +26,47 @@ def _format_docs(docs) -> str:
     return "\n\n".join(doc.page_content for doc in docs)
 
 
+def _get_llm(streaming: bool = False) -> ChatAnthropic:
+    return ChatAnthropic(
+        model=settings.llm_model,
+        temperature=settings.llm_temperature,
+        max_tokens=settings.llm_max_tokens,
+        anthropic_api_key=settings.anthropic_api_key,
+        streaming=streaming,
+    )
+
+
 def get_rag_chain():
-    """Returns a LCEL RAG chain that also exposes source_documents."""
+    """LCEL RAG chain — returns answer + source_documents."""
     vector_store = get_vector_store()
     retriever = vector_store.as_retriever(
         search_type="similarity",
         search_kwargs={"k": settings.retrieval_top_k},
     )
-    llm = ChatOpenAI(
-        model=settings.llm_model,
-        temperature=settings.llm_temperature,
-        openai_api_key=settings.openai_api_key,
-    )
 
-    # Return answer + source documents
-    rag_chain_with_sources = RunnableParallel(
-        {"source_documents": retriever, "question": RunnablePassthrough()}
-    ).assign(
-        context=lambda x: _format_docs(x["source_documents"]),
-    ).assign(
-        answer=RAG_PROMPT | llm | StrOutputParser()
+    rag_chain_with_sources = (
+        RunnableParallel(
+            {"source_documents": retriever, "question": RunnablePassthrough()}
+        )
+        .assign(context=lambda x: _format_docs(x["source_documents"]))
+        .assign(answer=RAG_PROMPT | _get_llm() | StrOutputParser())
     )
 
     return rag_chain_with_sources
 
 
 def get_rag_chain_stream():
-    """Returns a streaming LCEL chain (tokens only, no source docs)."""
+    """Streaming LCEL chain — yields tokens via SSE."""
     vector_store = get_vector_store()
     retriever = vector_store.as_retriever(
         search_type="similarity",
         search_kwargs={"k": settings.retrieval_top_k},
     )
-    llm = ChatOpenAI(
-        model=settings.llm_model,
-        temperature=settings.llm_temperature,
-        openai_api_key=settings.openai_api_key,
-        streaming=True,
-    )
 
     chain = (
         {"context": retriever | _format_docs, "question": RunnablePassthrough()}
         | RAG_PROMPT
-        | llm
+        | _get_llm(streaming=True)
         | StrOutputParser()
     )
 
